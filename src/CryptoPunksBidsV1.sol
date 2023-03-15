@@ -65,7 +65,7 @@ contract CryptoPunksBidsV1 {
     }
 
     /**
-     * @dev Places a global or trait bid.
+     * @dev Places a global or punk list bid.
      * @param _bidWei wei to bid.
      * @param _settlementWei wei as a bribe to a bot for settlement.
      */
@@ -139,7 +139,7 @@ contract CryptoPunksBidsV1 {
 
             globalBids[_bidId].bidWei = _oldBidWei - _weiToAdjust;
 
-            //Send settlement incentive to settler
+            //Send the adjustment back to the bidder.
             (bool succ1, ) = payable(msg.sender).call{
                 value: _weiToAdjust
             }("");
