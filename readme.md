@@ -3,4 +3,5 @@
 
 ### Goerli Deployments
 > CryptoPunksBidsV1: 0xdeb81166E00005B5C1A97B1A315eED8ca19a2090
+
 > CryptoPunks: 0xdCb2C6c26fb811b1e29De3AbeC6cd7765926a541
