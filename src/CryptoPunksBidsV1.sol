@@ -11,22 +11,29 @@ Concept by: mousedev.eth & kilo
 
 */
 
-import "forge-std/console.sol";
 import "./interfaces/ICryptoPunksMarket.sol";
-import "./interfaces/ICryptoPunksData.sol";
 
 struct GlobalBid {
-    //128 bits
-    uint128 bidWei;
+    //96 bits
+    uint96 bidWei;
 
-    //128 bits
-    uint128 settlementWei;
+    //96 bits
+    uint96 settlementWei;
 
     //160 bits
     address bidder;
 
     //160 bits optional receiver (if u want to send to cold wallet.)
     address receiver;
+
+    //   /\
+    //  /  \
+    //   ||
+    //   ||
+    // two slots
+
+    //an amount of bits
+    uint16[] punkIds;
 }
 
 contract CryptoPunksBidsV1 {
@@ -43,6 +50,15 @@ contract CryptoPunksBidsV1 {
     event BidAdjusted(uint256 _bidId, uint256 _newBidWei);
     event BidSettlementAdjusted(uint256 _bidId, uint256 _newBidSettlementWei);
 
+    error EtherSentNotEqualToEtherInBid();
+    error MsgSenderNotBidder();
+    error NotEnoughWeiSentForPositiveAdjustment();
+    error NegativeAdjustmentHigherThanCurrentBid();
+    error ETHTransferFailed();
+    error BidNotActive();
+    error OfferNotValid();
+    error PunkNotFoundInArray();
+
     constructor(address _cryptoPunksAddress)
     {
         cryptoPunksAddress = _cryptoPunksAddress;
@@ -54,15 +70,13 @@ contract CryptoPunksBidsV1 {
      * @param _settlementWei wei as a bribe to a bot for settlement.
      */
     function placeBid(
-        uint128 _bidWei,
-        uint128 _settlementWei,
-        address _receiver
+        uint96 _bidWei,
+        uint96 _settlementWei,
+        address _receiver,
+        uint16[] memory _punkIds
     ) public payable returns(uint256){
         //Require they sent exact ether with tx.
-        require(
-            msg.value == _bidWei + _settlementWei,
-            "Ether sent did not match ether in bid"
-        );
+        if(msg.value != _bidWei + _settlementWei) revert EtherSentNotEqualToEtherInBid();
 
         uint256 _thisBidId = currentBidId;
 
@@ -70,7 +84,8 @@ contract CryptoPunksBidsV1 {
             _bidWei,
             _settlementWei,
             msg.sender,
-            _receiver
+            _receiver,
+            _punkIds
         );
 
         currentBidId++;
@@ -88,38 +103,39 @@ contract CryptoPunksBidsV1 {
         GlobalBid memory _globalBid = globalBids[_bidId];
 
         //Require they made this bid.
-        require(_globalBid.bidder == msg.sender, "You did not make this bid!");
+        if(_globalBid.bidder != msg.sender) revert MsgSenderNotBidder();
 
         //Remove struct from storage.
         delete globalBids[_bidId];
 
         //Send eth back to bidder
         (bool succ1, ) = payable(msg.sender).call{value: _globalBid.bidWei + _globalBid.settlementWei}("");
-        require(succ1, "transfer failed");
+        if(!succ1) revert ETHTransferFailed();
 
         emit BidRemoved( _bidId);
     }
 
-    function adjustBidPrice(uint256 _bidId, uint128 _weiToAdjust, bool _direction) public payable {
+    function adjustBidPrice(uint256 _bidId, uint96 _weiToAdjust, bool _direction) public payable {
         GlobalBid memory _globalBid = globalBids[_bidId];
 
         //Require they made this bid.
-        require(_globalBid.bidder == msg.sender, "You did not make this bid!");
+        if(_globalBid.bidder != msg.sender) revert MsgSenderNotBidder();
 
         if(_direction){
             //increase bid
-            require(msg.value >= _weiToAdjust, "Did not send enough wei for adjustment");
+            //Require the message value is greater than or equal to what they inputted for wei to adjust.
+            if(_weiToAdjust > msg.value) revert NotEnoughWeiSentForPositiveAdjustment();
 
-            uint128 _oldBidWei = globalBids[_bidId].bidWei;
+            uint96 _oldBidWei = globalBids[_bidId].bidWei;
 
             globalBids[_bidId].bidWei = _oldBidWei + _weiToAdjust;
 
             emit BidAdjusted(_bidId, _oldBidWei + _weiToAdjust);
         } else {
             //reduce bid
-            require(_globalBid.bidWei >= _weiToAdjust, "Adjustment is higher than current bid");
+            if(_weiToAdjust > _globalBid.bidWei) revert NegativeAdjustmentHigherThanCurrentBid();
 
-            uint128 _oldBidWei = globalBids[_bidId].bidWei;
+            uint96 _oldBidWei = globalBids[_bidId].bidWei;
 
             globalBids[_bidId].bidWei = _oldBidWei - _weiToAdjust;
 
@@ -133,19 +149,19 @@ contract CryptoPunksBidsV1 {
         }
     }
 
-    function adjustBidSettlementPrice(uint256 _bidId, uint128 _weiToAdjust, bool _direction) public payable {
+    function adjustBidSettlementPrice(uint256 _bidId, uint96 _weiToAdjust, bool _direction) public payable {
         GlobalBid memory _globalBid = globalBids[_bidId];
 
         //Require they made this bid.
-        require(_globalBid.bidder == msg.sender, "You did not make this bid!");
+        if(_globalBid.bidder != msg.sender) revert MsgSenderNotBidder();
 
         if(_direction){
             //increase bid
             //Require the message value is greater than or equal to what they inputted for wei to adjust.
-            require(msg.value >= _weiToAdjust, "Did not send enough wei for adjustment");
+            if(_weiToAdjust > msg.value) revert NotEnoughWeiSentForPositiveAdjustment();
 
             //Store the old settlement price
-            uint128 _oldSettlementWei = globalBids[_bidId].settlementWei;
+            uint96 _oldSettlementWei = globalBids[_bidId].settlementWei;
 
             //Set the new settlement price to old + adjustment
             globalBids[_bidId].settlementWei = _oldSettlementWei + _weiToAdjust;
@@ -154,11 +170,11 @@ contract CryptoPunksBidsV1 {
             emit BidAdjusted(_bidId, _oldSettlementWei + _weiToAdjust);
         } else {
             //reduce bid
-            //Require their current settlement cost is higher than what they are reducing by.
-            require(_globalBid.settlementWei >= _weiToAdjust, "Adjustment is higher than current bid");
+            //Require their current settlement cost is greater than or equal to what they are reducing by.
+            if(_weiToAdjust > _globalBid.settlementWei) revert NegativeAdjustmentHigherThanCurrentBid();
 
             //Store the old settlement price
-            uint128 _oldSettlementWei = globalBids[_bidId].settlementWei;
+            uint96 _oldSettlementWei = globalBids[_bidId].settlementWei;
 
             //Set the new settlement price to the old price minus the adjustment
             globalBids[_bidId].settlementWei = _oldSettlementWei - _weiToAdjust;
@@ -167,7 +183,7 @@ contract CryptoPunksBidsV1 {
             (bool succ1, ) = payable(msg.sender).call{
                 value: _weiToAdjust
             }("");
-            require(succ1, "transfer failed");
+            if(!succ1) revert ETHTransferFailed();
 
             //Emit event for listeners
             emit BidSettlementAdjusted(_bidId, _oldSettlementWei - _weiToAdjust);
@@ -179,10 +195,22 @@ contract CryptoPunksBidsV1 {
         //Pull this bid into memory
         GlobalBid memory _globalBid = globalBids[_bidId];
 
-        require(globalBids[_bidId].bidder != address(0x0), "Bid not active!");
+        if(globalBids[_bidId].bidder == address(0x0)) revert BidNotActive();
+
+        if(_globalBid.punkIds.length > 0){
+            //They wanted to target specific punkIds.
+            for(uint256 i = 0; i < _globalBid.punkIds.length; ++i){
+                //If this provided punk matches the punk in their list, break out of for loop and continue.
+                if(_globalBid.punkIds[i] == _punkId) break;
+
+                //If we are on the last iteration and we haven't broken out, revert.
+                if(i == _globalBid.punkIds.length - 1) revert PunkNotFoundInArray();
+            }
+        }
 
         //Remove their bid from storage (slight refund)
         delete globalBids[_bidId];
+
 
         //Pull the offer into memory
         Offer memory _offer = ICryptoPunksMarket(cryptoPunksAddress)
@@ -190,7 +218,7 @@ contract CryptoPunksBidsV1 {
 
         //Require the bid is greater or equal to the offer
         //If you bid 80e, a 70e offer is valid for matching.
-        require(_offer.minValue <= _globalBid.bidWei, "Offer not valid.");
+        if(_offer.minValue > _globalBid.bidWei) revert OfferNotValid();
 
         //Buy the punk from the marketplace
         //Costs approx: 87085 gas
@@ -212,14 +240,14 @@ contract CryptoPunksBidsV1 {
         (bool succ1, ) = payable(msg.sender).call{
             value: _globalBid.settlementWei
         }("");
-        require(succ1, "settlement transfer failed");
+        if(!succ1) revert ETHTransferFailed();
 
         //Send excess back to bidder
         if (_globalBid.bidWei > _offer.minValue) {
             (bool succ2, ) = payable(_globalBid.bidder).call{
                 value: _globalBid.bidWei - _offer.minValue
             }("");
-            require(succ2, "bidder excess transfer failed");
+            if(!succ2) revert ETHTransferFailed();
         }
     }
 }
