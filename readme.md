@@ -4,4 +4,4 @@
 ### Goerli Deployments
 > CryptoPunks: 0xdCb2C6c26fb811b1e29De3AbeC6cd7765926a541 (call getPunk with a punk ID to get that punk.)
 
-> CryptoPunksBidsV1: 0xdeb81166E00005B5C1A97B1A315eED8ca19a2090
+> CryptoPunksBidsV1: 0x7BC9B045D72a62c806766ee918b53259b5CB5cC7
