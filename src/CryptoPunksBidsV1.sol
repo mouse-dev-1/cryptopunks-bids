@@ -141,27 +141,35 @@ contract CryptoPunksBidsV1 {
 
         if(_direction){
             //increase bid
+            //Require the message value is greater than or equal to what they inputted for wei to adjust.
             require(msg.value >= _weiToAdjust, "Did not send enough wei for adjustment");
 
+            //Store the old settlement price
             uint128 _oldSettlementWei = globalBids[_bidId].settlementWei;
 
+            //Set the new settlement price to old + adjustment
             globalBids[_bidId].settlementWei = _oldSettlementWei + _weiToAdjust;
 
+            //Emit event for listeners
             emit BidAdjusted(_bidId, _oldSettlementWei + _weiToAdjust);
         } else {
             //reduce bid
+            //Require their current settlement cost is higher than what they are reducing by.
             require(_globalBid.settlementWei >= _weiToAdjust, "Adjustment is higher than current bid");
 
+            //Store the old settlement price
             uint128 _oldSettlementWei = globalBids[_bidId].settlementWei;
 
+            //Set the new settlement price to the old price minus the adjustment
             globalBids[_bidId].settlementWei = _oldSettlementWei - _weiToAdjust;
 
-            //Send settlement incentive to settler
+            //Send the adjustment back to the bidder.
             (bool succ1, ) = payable(msg.sender).call{
                 value: _weiToAdjust
             }("");
             require(succ1, "transfer failed");
 
+            //Emit event for listeners
             emit BidSettlementAdjusted(_bidId, _oldSettlementWei - _weiToAdjust);
         }
     }
@@ -173,6 +181,7 @@ contract CryptoPunksBidsV1 {
 
         require(globalBids[_bidId].bidder != address(0x0), "Bid not active!");
 
+        //Remove their bid from storage (slight refund)
         delete globalBids[_bidId];
 
         //Pull the offer into memory
