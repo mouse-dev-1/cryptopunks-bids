@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import "../src/CryptoPunksBidsV1.sol";
+import "../src/V1/CryptoPunksBidsV1.sol";
 
 contract DeployBidsV1Testnet is Script {
     function run() external {

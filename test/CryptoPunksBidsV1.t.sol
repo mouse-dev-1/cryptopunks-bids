@@ -3,8 +3,8 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 
-import {ICryptoPunksMarket} from "../src/interfaces/ICryptoPunksMarket.sol";
-import {CryptoPunksBidsV1} from "../src/CryptoPunksBidsV1.sol";
+import {ICryptoPunksMarket} from "../src/V1/interfaces/ICryptoPunksMarket.sol";
+import {CryptoPunksBidsV1} from "../src/V1/CryptoPunksBidsV1.sol";
 
 contract TestCryptoPunksBidsV1 is Test {
     
