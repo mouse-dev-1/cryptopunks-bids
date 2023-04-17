@@ -19,7 +19,8 @@ struct TraitFilter {
     //true - inclusive
     //false - exclusive
     bool direction;
-    //No cryptopunk trait is greater than 20 bytes in length :D
+
+    //What id from 0-97 you want to target.
     uint8 traitId;
 }
 

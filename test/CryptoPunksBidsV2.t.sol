@@ -15,9 +15,30 @@ contract TestCryptoPunksBidsV2 is Test {
     ICryptoPunksData internal _CryptoPunksData;
     CryptoPunksBidsV2 internal _CryptoPunksBidsV2;
 
+    uint16[] _emptyPunkArray = _emptyPunkArray;
+
+    uint16[] _singlePunkArray = new uint16[](1);
+
+    uint16[] _multiPunkArray = new uint16[](4);
+    
+
+    error EtherSentNotEqualToEtherInBid();
+    error MsgSenderNotBidder();
+    error NotEnoughWeiSentForPositiveAdjustment();
+    error NegativeAdjustmentHigherThanCurrentBid();
+    error ETHTransferFailed();
+    error BidNotActive();
+    error OfferNotValid();
+    error PunkNotFoundInArray();
+
     //For receiving ether.
     fallback() external payable {}
 
+    //For receiving ether.
+    receive() external payable {}
+
+
+    
     function setUp() public {
         _CryptoPunksMarket = ICryptoPunksMarket(_cryptoPunksMarketDeployment);
 
@@ -36,6 +57,16 @@ contract TestCryptoPunksBidsV2 is Test {
         _CryptoPunksBidsV2 = new CryptoPunksBidsV2(address(_CryptoPunksMarket), address(_CryptoPunksData));
     }
 
+    //TODO: More tests.
+    //Placing floor bid
+    //Placing trait filter bid
+        //Include positive and negative cases
+    //Placing inclusionary punkId bids
+        //Include positive and negative cases
+    //Placing exclusionary punkId bids
+        //Include positive and negative cases
+    //Combination of the three above
+
     function testPlacingAndAcceptingFloorBid() public {
         //Offer punk 1 for 100 ether;
         _CryptoPunksMarket.offerPunkForSale(3328, 100 ether);
@@ -51,11 +82,11 @@ contract TestCryptoPunksBidsV2 is Test {
         _traitFilters[3] = TraitFilter(false, 80);
 
         //Place floor bid for 110 ether;
-        uint256 _bidId = _CryptoPunksBidsV2.placeBid{value: 110.01 ether}(
-            110 ether,
-            0.01 ether,
-            _traitFilters
-        );
+        //for(uint256 i = 0;i<1000;i++){
+        //    _CryptoPunksBidsV2.placeBid{value: 110.01 ether}(110 ether, 0.01 ether, _traitFilters, _emptyPunkArray, _emptyPunkArray);
+       // }
+        
+        uint256 _bidId = _CryptoPunksBidsV2.placeBid{value: 110.01 ether}(110 ether, 0.01 ether, _traitFilters, _emptyPunkArray, _emptyPunkArray);
 
         //Anyone can call this function.
 

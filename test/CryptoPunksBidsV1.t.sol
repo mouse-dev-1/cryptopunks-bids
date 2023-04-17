@@ -19,6 +19,11 @@ contract TestCryptoPunksBidsV1 is Test {
 
     uint16[] _multiPunkArray = new uint16[](4);
 
+    //For receiving ether.
+    fallback() external payable {}
+
+    //For receiving ether.
+    receive() external payable {}
     
     error EtherSentNotEqualToEtherInBid();
     error MsgSenderNotBidder();
@@ -28,10 +33,6 @@ contract TestCryptoPunksBidsV1 is Test {
     error BidNotActive();
     error OfferNotValid();
     error PunkNotFoundInArray();
-
-
-    //For receiving ether.
-    fallback() external payable{}
 
     function setUp() public {
 

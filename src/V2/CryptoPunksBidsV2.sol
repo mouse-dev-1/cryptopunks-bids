@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /*
 
-CryptoPunksBids.sol
+CryptoPunksBidsV2.sol
 
 Written by: mousedev.eth
 
@@ -21,6 +21,10 @@ struct GlobalBid {
     uint96 settlementWei;
     //160 bits
     address bidder;
+
+    //2 bits
+    bool accepted;
+
     //   /\
     //  /  \
     //   ||
@@ -28,6 +32,9 @@ struct GlobalBid {
     // two slots
 
     bytes traitFilters;
+    
+    uint16[] punkIdsInclusionary;
+    uint16[] punkIdsExclusionary;
 }
 
 contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
@@ -40,7 +47,7 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
 
     address public cryptoPunksAddress;
 
-    event BidPlaced(uint256 _bidId, uint256 _bidWei);
+    event BidPlaced(uint256 _bidId, uint256 _bidWei, uint256 _settlementWei, TraitFilter[] _traitFilters, uint16[] punkIdsInclusionary, uint16[] punkIdsExclusionary);
     event BidRemoved(uint256 _bidId);
     event BidAccepted(uint256 _bidId);
     event BidAdjusted(uint256 _bidId, uint256 _newBidWei);
@@ -53,6 +60,7 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
     error ETHTransferFailed();
     error BidNotActive();
     error OfferNotValid();
+    error UnwantedPunkFoundInArray();
     error PunkNotFoundInArray();
 
     constructor(address _cryptoPunksAddress, address _cryptoPunksDataAddress) {
@@ -66,11 +74,16 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
      * @dev Places a global or punk list bid.
      * @param _bidWei wei to bid.
      * @param _settlementWei wei as a bribe to a bot for settlement.
+     * @param _traitFilters wei as a bribe to a bot for settlement.
+     * @param _punkIdsInclusionary The punkIds to allow this bid to be accepted for.
+     * @param _punkIdsExclusionary The punkIds to not allow this bid to be accepted for.
      */
     function placeBid(
         uint96 _bidWei,
         uint96 _settlementWei,
-        TraitFilter[] memory _traitFilters
+        TraitFilter[] calldata _traitFilters,
+        uint16[] calldata _punkIdsInclusionary,
+        uint16[] calldata _punkIdsExclusionary
     ) public payable returns (uint256) {
         //Require they sent exact ether with tx.
         if (msg.value != _bidWei + _settlementWei)
@@ -83,6 +96,10 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
         _thisBid.bidWei = _bidWei;
         _thisBid.settlementWei = _settlementWei;
         _thisBid.bidder = msg.sender;
+        _thisBid.accepted = false;
+        _thisBid.punkIdsInclusionary = _punkIdsInclusionary;
+        _thisBid.punkIdsExclusionary = _punkIdsExclusionary;
+        
         bytes memory _traitFiltersPacked;
 
         for (uint256 i = 0; i < _traitFilters.length; i++) {
@@ -93,7 +110,7 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
 
         currentBidId++;
 
-        emit BidPlaced(_thisBidId, _bidWei);
+        emit BidPlaced(_thisBidId, _bidWei, _settlementWei, _traitFilters, _punkIdsInclusionary, _punkIdsExclusionary);
 
         return _thisBidId;
     }
@@ -120,6 +137,12 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
         emit BidRemoved(_bidId);
     }
 
+    /**
+     * @dev Adjust the current bid price of a bid
+     * @param _bidId The bid to adjust
+     * @param _weiToAdjust How much to add or remove from the bid
+     * @param _direction Whether to add or remove from the bid (true = add, false = remove)
+     */
     function adjustBidPrice(
         uint256 _bidId,
         uint96 _weiToAdjust,
@@ -158,6 +181,12 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
         }
     }
 
+    /**
+     * @dev Adjust the current settlement price of a bid
+     * @param _bidId The bid to adjust
+     * @param _weiToAdjust How much to add or remove from the settlement price
+     * @param _direction Whether to add or remove from the bid (true = add, false = remove)
+     */
     function adjustBidSettlementPrice(
         uint256 _bidId,
         uint96 _weiToAdjust,
@@ -206,12 +235,23 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
         }
     }
 
+    /**
+     * @dev Accepts a bid given a bidId and a punkId
+     * @param _bidId The bid to accept
+     * @param _punkId The punkId to accept the bid with
+     */
     function acceptBid(uint256 _bidId, uint16 _punkId) public {
         //Pull this bid into memory
         GlobalBid memory _globalBid = globalBids[_bidId];
 
-        if (globalBids[_bidId].bidder == address(0x0)) revert BidNotActive();
+        //If the bid was already accepted, revert.
+        if (globalBids[_bidId].accepted == true) revert BidNotActive();
 
+        //Set bid to accepted
+        globalBids[_bidId].accepted = true;
+
+
+        //If they chose any trait filters, ensure they are compatible with this bid
         if (_globalBid.traitFilters.length > 0) {
             require(
                 isPunkCompatible(_globalBid.traitFilters, _punkId),
@@ -219,8 +259,25 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
             );
         }
 
-        //Remove their bid from storage (slight refund)
-        delete globalBids[_bidId];
+        //If they have punks they would like to exclude, ensure matched punk is not in that list.
+        if(_globalBid.punkIdsExclusionary.length > 0){
+            for(uint256 i = 0; i < _globalBid.punkIdsExclusionary.length; ++i){
+                //If the punk is found in their exclusionary list, revert.
+                if(_globalBid.punkIdsExclusionary[i] == _punkId) revert UnwantedPunkFoundInArray();
+            }
+        }
+
+        if(_globalBid.punkIdsInclusionary.length > 0){
+            //They wanted to target specific punkIds.
+            for(uint256 i = 0; i < _globalBid.punkIdsInclusionary.length; ++i){
+                //If this provided punk matches the punk in their list, break out of for loop and continue.
+                if(_globalBid.punkIdsInclusionary[i] == _punkId) break;
+
+                //If we are on the last iteration and we haven't broken out, revert.
+                if(i == _globalBid.punkIdsInclusionary.length - 1) revert PunkNotFoundInArray();
+            }
+        }
+
 
         //Pull the offer into memory
         Offer memory _offer = ICryptoPunksMarket(cryptoPunksAddress)
@@ -262,4 +319,22 @@ contract CryptoPunksBidsV2 is CryptoPunksDataWrapper {
 
         emit BidAccepted(_bidId);
     }
+
+    /**
+     * @dev Query bids given a starting and ending index 
+     * @param _startIndex The index to start querying from
+     * @param _endIndex The index to end querying on
+     */
+    function queryBids(uint256 _startIndex, uint256 _endIndex) public pure returns(GlobalBid[] memory) {
+        GlobalBid[] memory _globalBids = new GlobalBid[](_endIndex - _startIndex);
+
+        uint j;
+        for(uint i = _startIndex; i < _endIndex; i++){
+            _globalBids[j] = _globalBids[i];
+            j++;
+        }
+
+        return _globalBids;
+    }
+
 }
