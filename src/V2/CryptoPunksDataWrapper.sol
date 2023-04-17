@@ -13,7 +13,6 @@ Concept by: mousedev.eth & kilo
 
 import "./strings.sol";
 import "./interfaces/ICryptoPunksData.sol";
-import "forge-std/console.sol";
 
 struct TraitFilter {
     //true - inclusive
@@ -158,14 +157,6 @@ abstract contract CryptoPunksDataWrapper {
         for (uint i = 0; i < _traitFiltersDecoded.length; i++) {
             if (_traitFiltersDecoded[i].direction) {
                 for (uint256 j = 0; j < _traitsSplit.length; j++) {
-                    console.logBytes32(_traitsSplit[j]);
-                    console.logBytes32(
-                        traitIdToHash[_traitFiltersDecoded[i].traitId]
-                    );
-                    console.log(
-                        _traitsSplit[j] ==
-                            traitIdToHash[_traitFiltersDecoded[i].traitId]
-                    );
 
                     //If the trait is found on the punk, break out of this loop
                     if (
@@ -174,7 +165,6 @@ abstract contract CryptoPunksDataWrapper {
                     ) break;
                     //If we haven't broken out yet, return false.
                     if (j == _traitsSplit.length - 1) {
-                        console.log("Included trait not found on punk!");
                         return false;
                     }
                 }
@@ -185,7 +175,6 @@ abstract contract CryptoPunksDataWrapper {
                         _traitsSplit[j] ==
                         traitIdToHash[_traitFiltersDecoded[i].traitId]
                     ) {
-                        console.log("Excluded trait found on punk!");
                         return false;
                     }
                 }
